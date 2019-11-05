@@ -46,7 +46,7 @@ OdomCalib Odom_calib;
 
 std::vector<geometry_msgs::PointStamped> mcu_path;
 
-Eigen::Vector3d  cal_delta_distence(Eigen::Vector3d odom_pose);
+Eigen::Vector3d  cal_delta_distance(Eigen::Vector3d odom_pose);
 /*
  * 获取激光数据类
 */
@@ -289,7 +289,7 @@ void Scan2::scanCallBack(const sensor_msgs::LaserScan::ConstPtr &_laserScanMsg)
         return ;
 
     //前后两帧里程计的位姿差
-    d_point_odom = cal_delta_distence(odom_pose);
+    d_point_odom = cal_delta_distance(odom_pose);
 
     //如果运动的距离太短，则不进行处理．
     if(d_point_odom(0) < 0.05 &&
@@ -349,13 +349,27 @@ void Scan2::scanCallBack(const sensor_msgs::LaserScan::ConstPtr &_laserScanMsg)
 //TODO:
 //求解得到两帧数据之间的位姿差
 //即求解当前位姿　在　上一时刻　坐标系中的坐标
-Eigen::Vector3d  cal_delta_distence(Eigen::Vector3d odom_pose)
+Eigen::Vector3d  cal_delta_distance(Eigen::Vector3d odom_pose)
 {
 
     Eigen::Vector3d d_pos;  //return value
     now_pos = odom_pose;
 
     //TODO:
+    Eigen::Vector3d now_last = now_pos - last_pos;
+    Eigen::Matrix3d last_T ;
+    last_T << cos(last_pos[2]),-sin(last_pos[2]),0,
+              sin(last_pos[2]),cos(last_pos[2]),0,
+              0,                0,               1;
+    d_pos = last_T.transpose() * now_last;
+    //degree regular
+    if(d_pos[2]>M_PI)
+        d_pos[2] = -M_PI + d_pos[2]-floor(d_pos[2]/M_PI)*M_PI;
+    if(d_pos[2]<-M_PI)
+        d_pos[2] = M_PI + d_pos[2]+floor(d_pos[2]/(-M_PI))*M_PI;
+
+    assert(d_pos[2] <= M_PI && d_pos[2] >= -M_PI);
+
     //end of TODO:
 
     return d_pos;
