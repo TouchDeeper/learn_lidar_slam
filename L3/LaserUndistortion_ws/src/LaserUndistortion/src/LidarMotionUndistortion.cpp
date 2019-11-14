@@ -2,6 +2,7 @@
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
+#include <tf_conversions/tf_eigen.h>
 
 #include <sensor_msgs/LaserScan.h>
 
@@ -205,6 +206,37 @@ public:
             int& beam_number)
     {
        //TODO
+
+        tf::Quaternion start_Qua = frame_start_pose.getRotation();
+        tf::Vector3 start_translate = frame_start_pose.getOrigin();
+        tf::Quaternion end_Qua = frame_end_pose.getRotation();
+        tf::Vector3 end_translate = frame_end_pose.getOrigin();
+
+        float increment = 1.0 / (beam_number-1);
+
+        for (int i = 0; i < beam_number; ++i) {
+            float interpolation_coeff = increment*i;
+            tf::Quaternion inter_Qua = start_Qua.slerp(end_Qua,interpolation_coeff);
+            tf::Vector3 inter_translate = start_translate.lerp(end_translate,interpolation_coeff);
+            int inter_index = i + startIndex;
+            tf::Pose inter_pose(inter_Qua, inter_translate);
+            double x = ranges[inter_index] * cos(angles[inter_index]);
+            double y = ranges[inter_index] * sin(angles[inter_index]);
+            tf::Pose base_T_inter_tf_pose = frame_base_pose.inverse() * inter_pose;
+            tf::Quaternion base_Q_inter_tf_pose = base_T_inter_tf_pose.getRotation();
+            tf::Vector3 base_t_inter_tf_pose = base_T_inter_tf_pose.getOrigin();
+            Eigen::Quaterniond base_Q_inter(base_Q_inter_tf_pose.w(),base_Q_inter_tf_pose.x(), base_Q_inter_tf_pose.y(),base_Q_inter_tf_pose.z());
+            Eigen::Vector3d base_t_inter(base_t_inter_tf_pose[0],base_t_inter_tf_pose[1],base_t_inter_tf_pose[2]);
+            Eigen::Isometry3d base_T_inter = Eigen::Isometry3d::Identity();
+            base_T_inter.rotate( base_Q_inter);
+            base_T_inter.pretranslate(base_t_inter);
+            Eigen::Vector3d base_xy = base_T_inter * Eigen::Vector3d(x,y,0);
+            ranges[inter_index] = sqrt(base_xy[0] * base_xy[0] + base_xy[1] * base_xy[1]);
+            angles[inter_index] = atan2(base_xy[1], base_xy[0]);
+        }
+
+
+
        //end of TODO
     }
 
@@ -287,7 +319,7 @@ public:
                 }
 
                 //对当前的起点和终点进行插值
-                //interpolation_time_duration中间有多少个点.
+                //interpolation_time_duration中间有多少个点, take the start and end into account
                 int interp_count = i - start_index + 1;
 
                 Lidar_MotionCalibration(frame_base_pose,
