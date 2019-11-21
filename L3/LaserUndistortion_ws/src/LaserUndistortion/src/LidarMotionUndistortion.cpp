@@ -235,8 +235,6 @@ public:
             angles[inter_index] = atan2(base_xy[1], base_xy[0]);
         }
 
-
-
        //end of TODO
     }
 
