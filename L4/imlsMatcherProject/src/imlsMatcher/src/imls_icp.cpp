@@ -206,7 +206,16 @@ bool IMLSICPMatcher::ImplicitMLSFunction(Eigen::Vector2d x,
 
     //TODO
     //根据函数进行投影．计算height，即ppt中的I(x)
-
+    double weight_sum = 0;
+    double dist_sum = 0;
+    for (int j = 0; j < nearPoints.size(); ++j) {
+        Eigen::Vector2d delta_x = x - nearPoints[j];
+        double weight = exp(-delta_x.squaredNorm()/(m_r * m_r));
+        weight_sum += weight;
+        dist_sum += weight * delta_x.transpose() * nearNormals[j];
+    }
+    height = dist_sum / weight_sum;
+//    std::cout<<"height = "<<height<<"   m_r = "<<m_r<<std::endl;
     //end of TODO
 
     return true;
@@ -231,7 +240,6 @@ void IMLSICPMatcher::projSourcePtToSurface(
 {
     out_cloud.clear();
     out_normal.clear();
-
     for(std::vector<Eigen::Vector2d>::iterator it = in_cloud.begin(); it != in_cloud.end();)
     {
         Eigen::Vector2d xi = *it;
@@ -246,12 +254,14 @@ void IMLSICPMatcher::projSourcePtToSurface(
         Eigen::Vector2d nearXi = m_targetKDTreeDataBase.col(indices(0));
 
         //为最近邻计算法向量．－－进行投影的时候，使用统一的法向量．
+//        std::cout<<"nearXi indeices = "<<indices(0)<<std::endl;
         Eigen::Vector2d nearNormal = m_targetPtCloudNormals[indices(0)];
 
         //如果对应的点没有法向量，也认为没有匹配点．因此直接不考虑．
         if(std::isinf(nearNormal(0))||std::isinf(nearNormal(1))||
                 std::isnan(nearNormal(0))||std::isnan(nearNormal(1)))
         {
+//            std::cout<<"this point has no normal information"<<std::endl;
             it = in_cloud.erase(it);
             continue;
         }
@@ -260,6 +270,7 @@ void IMLSICPMatcher::projSourcePtToSurface(
         if(dist2(0) > m_h * m_h )
         {
             it = in_cloud.erase(it);
+//            std::cout<<"dist2 two far, delete this point"<<std::endl;
             continue;
         }
 
@@ -267,6 +278,7 @@ void IMLSICPMatcher::projSourcePtToSurface(
         double height;
         if(ImplicitMLSFunction(xi,height) == false)
         {
+//            std::cout<<"height compute fail, delete this point"<<std::endl;
             it = in_cloud.erase(it);
             continue;
         }
@@ -288,7 +300,16 @@ void IMLSICPMatcher::projSourcePtToSurface(
         Eigen::Vector2d yi;
         //TODO
         //计算yi．
-
+//        Eigen::Vector2d near_xi = xi - nearXi;
+//        double dot = near_xi.transpose() * nearNormal;
+//        double cos_angle = dot / (near_xi.norm() * nearNormal.norm());
+//        double angle = acos(cos_angle);
+////        assert(angle < M_PI_2);
+////        std::cout<<"angle = "<<angle<<std::endl;
+//        if(angle >= M_PI_2)
+//            yi = xi + nearNormal*height;
+//        else
+            yi = xi - nearNormal*height;
         //end of TODO
         out_cloud.push_back(yi);
         out_normal.push_back(nearNormal);
@@ -437,7 +458,36 @@ Eigen::Vector2d IMLSICPMatcher::ComputeNormal(std::vector<Eigen::Vector2d> &near
     Eigen::Vector2d normal;
 
     //TODO
+
+    // compute convariance, NICP's paper use integral images method to speed up the computation
+    Eigen::Vector2d u = Eigen::Vector2d::Zero();
     //根据周围的激光点计算法向量，参考ppt中NICP计算法向量的方法
+    for (const auto &item : nearPoints) {
+        u += item;
+    }
+    u /= nearPoints.size();
+    Eigen::Matrix2d cov = Eigen::Matrix2d::Zero();
+    for (const auto &item : nearPoints) {
+        cov += (item - u) * (item - u).transpose();
+    }
+    cov /= nearPoints.size();
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(cov);
+//    Eigen::JacobiSVD<Eigen::Matrix2d> svd(cov);
+//    Eigen::EigenSolver<Eigen::Matrix2d> es(cov);
+//    Eigen::Vector2d es_eigen_value = es.eigenvalues();
+//    int index_min = es_eigen_value[0] < es_eigen_value[1] ? 0:1;
+//    std::cout<<"es.eigenvectors = \n"<<es.eigenvectors()<<std::endl;
+    if(eigensolver.info() != Eigen::Success)
+    {
+        std::cout<<"eigen vector solve fail"<<std::endl;
+        normal(0) = normal(1) = std::numeric_limits<double>::infinity();
+
+    }
+    else{
+        normal = eigensolver.eigenvectors().col(0);
+//        std::cout<<"eigenvalues = \n"<<eigensolver.eigenvalues()<<std::endl;
+//        std::cout<<"selfadjoint eigenvectors = \n"<<eigensolver.eigenvectors()<<std::endl;
+    }
 
     //end of TODO
 
@@ -482,16 +532,18 @@ bool IMLSICPMatcher::Match(Eigen::Matrix3d& finalResult,
                 }
                 else break;
             }
-
+//            std::cout<<"computing normal"<<std::endl;
             //计算法向量
             Eigen::Vector2d normal;
             if(nearPoints.size() > 3)
             {
                 //计算法向量
                 normal = ComputeNormal(nearPoints);
+//                std::cout<<"normal = \n"<<normal<<std::endl;
             }
             else
             {
+//                std::cout<<"normal compute fail"<<std::endl;
                 normal(0) = normal(1) = std::numeric_limits<double>::infinity();
             }
             m_targetPtCloudNormals.push_back(normal);
@@ -544,12 +596,16 @@ bool IMLSICPMatcher::Match(Eigen::Matrix3d& finalResult,
 
         if(flag == false)
         {
+            std::cout<<"solve motion failed"<<std::endl;
             std::cout <<"ICP Iterations Failed!!!!"<<std::endl;
             return false;
         }
 
         //更新位姿．
+//        std::cout<<"befor update, result = \n"<<result<<std::endl;
+//        std::cout<<"deltaTrans = \n"<<deltaTrans<<std::endl;
         result = deltaTrans * result;
+//        std::cout<<"after update, result = \n"<<result<<std::endl;
 
         //迭代条件是否满足．
         double deltadist = std::sqrt( std::pow(deltaTrans(0,2),2) + std::pow(deltaTrans(1,2),2));

@@ -16,6 +16,9 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   rosbag
 )
+#sophus
+find_package(Sophus REQUIRED)
+include_directories(${Sophus_INCLUDE_DIRS})
 
 find_package(Boost REQUIRED COMPONENTS system thread graph)
 find_package(PCL 1.7 REQUIRED)
@@ -39,6 +42,7 @@ ${CERES_LIBRARIES}
 ${CSM_LIBRARIES}
 ${libnabo_LIBRARIES}
 ${OpenCV_LIBS}
+${Sophus_LIBRARIES}
 )
 
 
@@ -79,7 +83,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(imlsMatcher_node  src/main.cpp src/imls_icp.cpp)
+add_executable(imlsMatcher_node  src/main.cpp src/imls_icp.cpp src/CsmMatcher.cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(imlsMatcher_node
