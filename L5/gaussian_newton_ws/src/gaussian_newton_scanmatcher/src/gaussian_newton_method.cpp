@@ -1,5 +1,7 @@
 #include <map.h>
+#include <tf/LinearMath/Scalar.h>
 #include "gaussian_newton_method.h"
+
 
 const double GN_PI = 3.1415926;
 
@@ -89,7 +91,37 @@ Eigen::Vector3d InterpMapValueWithDerivatives(map_t* map,Eigen::Vector2d& coords
 {
     Eigen::Vector3d ans;
     //TODO
-
+    double x = coords(0);
+    double y = coords(1);
+    int y0 = floor(coords(1));
+    int y1 = ceil(coords[1]);
+    int x0 = floor(coords[0]);
+    int x1 = ceil(coords[0]);
+//    assert(x0 > 0);
+//    assert(x1 < map->size_x);
+//    assert(y0 > 0);
+//    assert(y1 < map->size_y);
+    Eigen::Vector2d coord00(x0, y0);
+    Eigen::Vector2d coord01(x0, y1);
+    Eigen::Vector2d coord10(x1, y0);
+    Eigen::Vector2d coord11(x1, y1);
+//    std::cout<<"xy ="<<coords.transpose()<<"  "<<"x0y0 = "<<coord00.transpose()<<"  "<<"x0y1 = "<<coord01.transpose()<<"   x1y0 = "<<coord10.transpose()<<"   x1y1 = "<<coord11.transpose()<<std::endl;
+//    std::cout<<"x1y1_index = "<<MAP_INDEX(map, x1, y1)<<std::endl;
+//    std::cout<<"size_x = " <<map->size_x<<std::endl;
+    double M_11 = map->cells[MAP_INDEX(map, x1, y1)].score;
+    double M_01 = map->cells[MAP_INDEX(map, x0, y1)].score;
+    double M_10 = map->cells[MAP_INDEX(map, x1, y0)].score;
+    double M_00 = map->cells[MAP_INDEX(map, x0, y0)].score;
+//    std::cout<<"M11 = "<<M_11<<std::endl;
+    double y_y0 = y - y0;
+    double y1_y0 = y1 - y0;
+    double x_x0 = x - x0;
+    double x1_x0 = x1 - x0;
+    double y1_y = y1 - y;
+    double x1_x = x1 - x;
+    ans(0) = y_y0 / y1_y0 * (x_x0 / x1_x0 * M_11 + x1_x / x1_x0 * M_01) + y1_y / y1_y0 * (x_x0 / x1_x0 * M_10 + x1_x / x1_x0 * M_00);
+    ans(1) = ( y_y0 / y1_y0 * (M_11- M_01) + y1_y / y1_y0 * (M_10 - M_00) ) / x1_x0;
+    ans(2) = ( x_x0 / x1_x0 * (M_11- M_10) + x1_x / x1_x0 * (M_01 - M_00) ) / y1_y0;
     //END OF TODO
 
     return ans;
@@ -113,6 +145,28 @@ void ComputeHessianAndb(map_t* map, Eigen::Vector3d now_pose,
     b = Eigen::Vector3d::Zero();
 
     //TODO
+    for (int i = 0; i < laser_pts.size(); ++i) {
+        Eigen::Matrix3d now_T;
+        now_T << cos(now_pose(2)), -sin(now_pose(2)), now_pose(0),
+                sin(now_pose(2)), cos(now_pose(2)), now_pose(1),
+                0,               0,               1;
+        Eigen::Vector3d w_laser_pts = now_T * Eigen::Vector3d(laser_pts[i][0], laser_pts[i][1], 1);
+        Eigen::Vector2d map_laser_pts;
+        map_laser_pts[0] = (w_laser_pts[0] - map->origin_x) / map->resolution + map->size_x / 2.0;
+        map_laser_pts[1] = (w_laser_pts[1] - map->origin_y) / map->resolution + map->size_y / 2.0;
+        Eigen::Vector3d score_gradient = InterpMapValueWithDerivatives(map,map_laser_pts);
+        Eigen::Vector2d M_mi(score_gradient[1], score_gradient[2]);
+        Eigen::Matrix2d mi_si;
+        mi_si << 1/map->resolution, 0,
+                    0,             1/map->resolution;
+        Eigen::Matrix<double,2,3> si_T;
+        si_T << 1,  0,   -sin(now_pose[2])*laser_pts[i][0]-cos(now_pose[2])*laser_pts[i][1],
+                0,  1,   cos(now_pose[2])*laser_pts[i][0]-sin(now_pose[2])*laser_pts[i][1];
+        Eigen::Matrix<double,1,3> J = M_mi.transpose() * mi_si * si_T;
+        H += J.transpose() * J;
+        b += J.transpose() * (1 - score_gradient[0]);
+
+    }
 
     //END OF TODO
 }
@@ -133,7 +187,25 @@ void GaussianNewtonOptimization(map_t*map,Eigen::Vector3d& init_pose,std::vector
     for(int i = 0; i < maxIteration;i++)
     {
         //TODO
-
+        Eigen::Matrix3d H;
+        Eigen::Vector3d b;
+        ComputeHessianAndb(map, now_pose, laser_pts, H, b);
+        Eigen::Vector3d delta_x = H.colPivHouseholderQr().solve(b);
+//        Eigen::Vector3d delta_x = H.ldlt().solve(b);
+//        Eigen::Matrix3d delta_T;
+//        delta_T << cos(delta_x(2)), -sin(delta_x(2)), delta_x(0),
+//                    sin(delta_x(2)), cos(delta_x(2)), delta_x(1),
+//                    0,               0,               1;
+//        Eigen::Matrix3d now_T;
+//        now_T << cos(now_pose(2)), -sin(now_pose(2)), now_pose(0),
+//                sin(now_pose(2)), cos(now_pose(2)), now_pose(1),
+//                0,               0,               1;
+//        now_T = now_T * delta_T;
+        now_pose += delta_x;
+        now_pose(2) = tfNormalizeAngle(now_pose(2));
+//        now_pose[0] = now_T(0,2);
+//        now_pose[1] = now_T(1,2);
+//        now_pose[2] = atan2(now_T(1,0),now_T(0,0));
         //END OF TODO
     }
     init_pose = now_pose;

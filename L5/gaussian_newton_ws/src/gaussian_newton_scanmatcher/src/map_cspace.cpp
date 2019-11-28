@@ -148,7 +148,7 @@ void enqueue(map_t* map, unsigned int i, unsigned int j,
 
 /**
  * @brief map_update_cspace
- * 更新地图的距离值 这个函数用来计算用来定位的地图中的每隔栅格到最近障碍物的距离
+ * 更新地图的距离值 这个函数用来计算用来定位的地图中的每个栅格到最近障碍物的距离
  * 其中障碍物的栅格的距离为0 然后通过bfs进行搜索来计算每一个栅格到障碍物的距离
  * @param map
  * @param max_occ_dist

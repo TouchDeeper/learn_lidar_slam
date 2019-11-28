@@ -64,7 +64,7 @@ public:
         puber.publish(path_msg);
     }
 
-    void rosLaserScanCallback(const sensor_msgs::LaserScanConstPtr& msg)
+    void  rosLaserScanCallback(const sensor_msgs::LaserScanConstPtr& msg)
     {
         static bool isFirstFrame = true;
         Eigen::Vector3d nowPose;
@@ -81,7 +81,7 @@ public:
 
             m_prevLaserPose = nowPose;
             ConvertLaserScanToEigenPointCloud(msg,m_prevPts);
-
+            //这里的odomPath其实是单纯由odom转的laser的pose
             m_odomPath.push_back(nowPose);
             m_gaussianNewtonPath.push_back(nowPose);
 
@@ -147,11 +147,13 @@ public:
                      Eigen::Vector3d& pose)
     {
         // Get the robot's pose
+        // 创建一个odom到base_laser的固定变换
         tf::Stamped<tf::Pose> ident (tf::Transform(tf::createQuaternionFromRPY(0,0,0),
                                                    tf::Vector3(0,0,0)), t, "/base_laser");
         tf::Stamped<tf::Transform> odom_pose;
         try
         {
+            //将ident右乘odom得到laser的pose
             m_tfListener.transformPose("/odom", ident, odom_pose);
         }
         catch(tf::TransformException e)
