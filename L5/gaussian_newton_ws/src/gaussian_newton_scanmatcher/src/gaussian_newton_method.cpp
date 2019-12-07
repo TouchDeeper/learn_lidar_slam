@@ -112,7 +112,7 @@ Eigen::Vector3d InterpMapValueWithDerivatives(map_t* map,Eigen::Vector2d& coords
     double M_01 = map->cells[MAP_INDEX(map, x0, y1)].score;
     double M_10 = map->cells[MAP_INDEX(map, x1, y0)].score;
     double M_00 = map->cells[MAP_INDEX(map, x0, y0)].score;
-//    std::cout<<"M11 = "<<M_11<<std::endl;
+
     double y_y0 = y - y0;
     double y1_y0 = y1 - y0;
     double x_x0 = x - x0;
@@ -191,21 +191,8 @@ void GaussianNewtonOptimization(map_t*map,Eigen::Vector3d& init_pose,std::vector
         Eigen::Vector3d b;
         ComputeHessianAndb(map, now_pose, laser_pts, H, b);
         Eigen::Vector3d delta_x = H.colPivHouseholderQr().solve(b);
-//        Eigen::Vector3d delta_x = H.ldlt().solve(b);
-//        Eigen::Matrix3d delta_T;
-//        delta_T << cos(delta_x(2)), -sin(delta_x(2)), delta_x(0),
-//                    sin(delta_x(2)), cos(delta_x(2)), delta_x(1),
-//                    0,               0,               1;
-//        Eigen::Matrix3d now_T;
-//        now_T << cos(now_pose(2)), -sin(now_pose(2)), now_pose(0),
-//                sin(now_pose(2)), cos(now_pose(2)), now_pose(1),
-//                0,               0,               1;
-//        now_T = now_T * delta_T;
         now_pose += delta_x;
         now_pose(2) = tfNormalizeAngle(now_pose(2));
-//        now_pose[0] = now_T(0,2);
-//        now_pose[1] = now_T(1,2);
-//        now_pose[2] = atan2(now_T(1,0),now_T(0,0));
         //END OF TODO
     }
     init_pose = now_pose;
